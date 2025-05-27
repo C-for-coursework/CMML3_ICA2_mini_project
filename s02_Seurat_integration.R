@@ -6,7 +6,9 @@ require(Signac)
 library(rtracklayer)
 library(GenomicRanges)
 
-library(EnsDb.Hsapiens.v86)
+# Metadata
+csv <- read.csv("D:/Download/AdBrainCortex_SNAREseq_metadata.rds")
+tru <- rownames(csv[csv$Ident != "Mis",])
 
 # RNA
 data_dir = "Chen/RNA/"
@@ -15,11 +17,13 @@ barcodes <- read.delim(file.path(data_dir, "barcodes.tsv.gz"), header = FALSE)$V
 matrix <- readMM(file.path(data_dir, "matrix.mtx.gz"))
 rownames(matrix) <- features
 colnames(matrix) <- barcodes
+matrix_sub <- matrix[, colnames(matrix) %in% tru, drop = FALSE]
 rm(barcodes, features)
 
 # Compute single RNA
-rna <- CreateSeuratObject(counts = matrix, project = "GSE126074", min.cells = 1, min.features = 1)
+rna <- CreateSeuratObject(counts = matrix_sub, project = "GSE126074", min.cells = 1, min.features = 1)
 rm(matrix)
+rm(matrix_sub)
 DefaultAssay(rna) <- "RNA"
 rna <- NormalizeData(rna)
 rna <- FindVariableFeatures(rna, nfeatures = 4000)
@@ -28,13 +32,7 @@ rna <- RunPCA(rna)
 rna <- FindNeighbors(rna, dims = 1:20, reduction = "pca")
 rna <- FindClusters(rna, resolution = 0.5)
 rna <- RunUMAP(rna, reduction = "pca", dims = 1:15)
-p1 <- DimPlot(
-  rna,
-  reduction = "umap",     
-  group.by  = "seurat_clusters",  
-  label     = TRUE,      
-  pt.size   = 0.5         
-) + NoLegend() 
+p1 <- DimPlot(rna, reduction = "umap", group.by  = "seurat_clusters", label = TRUE, pt.size = 0.5)
 p1
 
 
@@ -45,11 +43,12 @@ barcodes <- read.delim(file.path(data_dir, "barcodes.tsv.gz"), header = FALSE)$V
 matrix <- readMM(file.path(data_dir, "matrix.mtx.gz"))
 rownames(matrix) <- peaks
 colnames(matrix) <- barcodes
+matrix_sub <- matrix[, colnames(matrix) %in% tru, drop = FALSE]
 rm(barcodes, peaks)
 
 
 chrom_assay <- CreateChromatinAssay(
-  counts = Matrix(matrix, sparse = TRUE),
+  counts = Matrix(matrix_sub, sparse = TRUE),
   sep = c(":", "-"),
   fragments = NULL
 )
@@ -64,13 +63,7 @@ rna <- RunSVD(rna,n = 50)
 rna <- FindNeighbors(rna, dims = 1:20, reduction = "lsi")
 rna <- FindClusters(rna, resolution = 0.5)
 rna <- RunUMAP(rna, reduction = "lsi", dims = 1:15)
-p2 <- DimPlot(
-  rna,
-  reduction = "umap",     
-  group.by  = "seurat_clusters",  
-  label     = TRUE,      
-  pt.size   = 0.5         
-) + NoLegend() 
+p2 <- DimPlot(rna, reduction = "umap", group.by  = "seurat_clusters", label = TRUE, pt.size = 0.5)
 p2
 
 # Integration
@@ -78,13 +71,7 @@ rna <- FindMultiModalNeighbors(rna, reduction.list = list("pca", "lsi"), dims.li
 
 rna <- RunUMAP(rna, nn.name = "weighted.nn", reduction.name = "wnn.umap", reduction.key = "wnnUMAP_")
 rna <- FindClusters(rna, graph.name = "wsnn", algorithm = 3, verbose = FALSE)
-p3 <- DimPlot(
-  rna,
-  reduction = "wnn.umap",     
-  group.by  = "seurat_clusters",  
-  label     = TRUE,      
-  pt.size   = 0.5         
-) + NoLegend() 
+p3 <- DimPlot(rna, reduction = "wnn.umap", group.by  = "seurat_clusters", label = TRUE, pt.size = 0.5)
 p3
 
 writeMM(rna@graphs$wsnn,"Seurat_connectivities.mtx")
